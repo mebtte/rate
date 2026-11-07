@@ -1,0 +1,244 @@
+name: Release
+
+on:
+  push:
+    tags: ['**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  frontend:
+    if: ${{ github.event.created && !github.event.deleted }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Test and build the frontend
+        working-directory: web
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rate-web
+          path: web/dist/
+          if-no-files-found: error
+
+  # Keep the IPinfo token isolated from npm lifecycle scripts and frontend builds.
+  geoip:
+    if: ${{ github.event.created && !github.event.deleted }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Test GeoIP download
+        run: python3 tests/fetch_geoip_test.py
+      - name: Fetch and verify the latest IPinfo Lite database
+        env:
+          IPINFO_DOWNLOAD_TOKEN: ${{ secrets.IPINFO_DOWNLOAD_TOKEN }}
+        run: bash scripts/fetch-geoip.sh build/geoip/ipinfo_lite.mmdb
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rate-geoip
+          path: build/geoip/ipinfo_lite.mmdb
+          if-no-files-found: error
+
+  binaries:
+    name: Build ${{ matrix.target }}
+    needs: [frontend, geoip]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+            asset: rate-linux-amd64
+            static-crt: true
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            asset: rate-linux-arm64
+            static-crt: true
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+            asset: rate-windows-amd64.exe
+            suffix: .exe
+            static-crt: true
+          - runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            asset: rate-windows-arm64.exe
+            suffix: .exe
+            static-crt: true
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            asset: rate-macos-arm64
+    env:
+      RATE_GEOIP_DB: ${{ github.workspace }}/build/geoip/ipinfo_lite.mmdb
+      RUSTFLAGS: ${{ matrix.static-crt && '-C target-feature=+crt-static' || '' }}
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+      CC_x86_64_unknown_linux_musl: musl-gcc
+      CC_aarch64_unknown_linux_musl: musl-gcc
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rate-web
+          path: web/dist
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rate-geoip
+          path: build/geoip
+      - name: Install the musl linker
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes musl-tools
+      - name: Set up Rust target
+        run: rustup target add --toolchain stable ${{ matrix.target }}
+      - name: Test and build the executable
+        shell: bash
+        env:
+          RUST_TARGET: ${{ matrix.target }}
+        run: |
+          cargo +stable test --locked --target "$RUST_TARGET"
+          cargo +stable build --locked --release --target "$RUST_TARGET" --bin rate
+      - name: Verify and stage the executable
+        shell: bash
+        env:
+          RUST_TARGET: ${{ matrix.target }}
+          EXECUTABLE_SUFFIX: ${{ matrix.suffix }}
+          RELEASE_ASSET: ${{ matrix.asset }}
+        run: |
+          binary="target/$RUST_TARGET/release/rate$EXECUTABLE_SUFFIX"
+          "$binary" --version
+          # The same two Linux binaries are copied into a scratch image.
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            program_headers=$(readelf -lW "$binary")
+            dynamic_section=$(readelf -dW "$binary")
+            if [[ "$program_headers" == *INTERP* || "$dynamic_section" == *NEEDED* ]]; then
+              echo 'Linux release binary requires a dynamic loader or library.' >&2
+              exit 1
+            fi
+          fi
+          mkdir -p release
+          cp "$binary" "release/$RELEASE_ASSET"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rate-binary-${{ matrix.asset }}
+          path: release/${{ matrix.asset }}
+          if-no-files-found: error
+
+  github-release:
+    needs: binaries
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: rate-binary-*
+          merge-multiple: true
+          path: release
+      - name: Publish binaries to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp THIRD_PARTY_NOTICES.md release/
+          release_info() {
+            gh release view --json isDraft,assets --repo "$GITHUB_REPOSITORY" -- "$GITHUB_REF_NAME"
+          }
+          if ! info=$(release_info 2>/dev/null); then
+            gh release create --draft --verify-tag --generate-notes --repo "$GITHUB_REPOSITORY" -- "$GITHUB_REF_NAME"
+            info=$(release_info)
+          fi
+
+          # A retry must not mix assets from different builds of the same tag.
+          draft=$(jq -r .isDraft <<< "$info")
+          uploads=()
+          for path in release/*; do
+            name=${path##*/}
+            existing=$(jq -c --arg name "$name" 'first(.assets[]? | select(.name == $name)) // null' <<< "$info")
+            if [[ "$existing" != null ]]; then
+              local_digest=$(sha256sum -- "$path")
+              remote_digest=$(jq -r '.digest // empty' <<< "$existing")
+              if [[ "$remote_digest" == "sha256:${local_digest%% *}" ]]; then
+                continue
+              fi
+              if [[ "$draft" != true ]]; then
+                printf 'Published release asset %s does not match the current build.\n' "$name" >&2
+                exit 1
+              fi
+            fi
+            uploads+=("$path")
+          done
+          if (( ${#uploads[@]} )); then
+            upload_flags=()
+            if [[ "$draft" == true ]]; then
+              upload_flags+=(--clobber)
+            fi
+            gh release upload "${upload_flags[@]}" --repo "$GITHUB_REPOSITORY" -- "$GITHUB_REF_NAME" "${uploads[@]}"
+          fi
+          if [[ "$draft" == true ]]; then
+            gh release edit --draft=false --repo "$GITHUB_REPOSITORY" -- "$GITHUB_REF_NAME"
+          fi
+
+  docker-hub:
+    needs: [binaries, github-release]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: rate-binary-rate-linux-*
+          merge-multiple: true
+          path: image-bin
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Resolve the Docker image tag
+        id: image
+        shell: bash
+        env:
+          IMAGE_REPOSITORY: ${{ vars.DOCKERHUB_IMAGE || format('{0}/rate', vars.DOCKERHUB_USERNAME) }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          # Git refs may contain characters unsupported by Docker tags.
+          if [[ ! "$tag" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ || "$tag" == git-sha256-* ]]; then
+            digest=$(printf '%s' "$tag" | sha256sum)
+            tag="git-sha256-${digest%% *}"
+          fi
+          printf 'tag=%s:%s\n' "$IMAGE_REPOSITORY" "$tag" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.image.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}

@@ -1,0 +1,10 @@
+FROM scratch
+
+ARG TARGETARCH
+COPY --chmod=0555 image-bin/rate-linux-${TARGETARCH} /rate
+COPY LICENSE THIRD_PARTY_NOTICES.md /licenses/
+
+ENV RATE_HOST=0.0.0.0
+EXPOSE 8080
+USER 65532:65532
+ENTRYPOINT ["/rate"]
