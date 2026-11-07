@@ -1,0 +1,163 @@
+body { margin: 0; }
+
+.rate {
+  container: rate / inline-size;
+  min-height: 100svh;
+  display: grid;
+  align-items: center;
+  --rate-page: #f5f5f9;
+  --rate-panel: #fff;
+  --rate-text: #1e1b30;
+  --rate-subtle: #625f75;
+  --rate-rule: #e1dfeb;
+  --rate-signal: #5941c7;
+  --rate-on-signal: #fff;
+  --rate-tint: #eeeafa;
+  background: var(--rate-page);
+  color: var(--rate-text);
+  font: 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  .rate {
+    --rate-page: #161620;
+    --rate-panel: #20202d;
+    --rate-text: #f5f3fd;
+    --rate-subtle: #b5b2c7;
+    --rate-rule: #38364a;
+    --rate-signal: #b6a7ff;
+    --rate-on-signal: #201748;
+    --rate-tint: #352c54;
+  }
+}
+.rate, .rate * { box-sizing: border-box; }
+.rate :is(h2, p, dl, dd) { margin: 0; }
+.rate .rate-brand { display: flex; align-items: center; justify-content: center; gap: 9px; font-size: 22px; font-weight: 750; letter-spacing: -.045em; }
+.rate .rate-mark {
+  display: grid; place-items: center; width: 29px; height: 29px; border-radius: 8px;
+  background: var(--rate-signal); color: var(--rate-on-signal);
+}
+.rate .rate-body { width: min(100%, 1680px); margin-inline: auto; padding: clamp(16px, 4svh, 56px) clamp(16px, 4cqi, 52px); }
+.rate .rate-main { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 16px; }
+.rate .rate-intro { container: controls / inline-size; min-width: 0; text-align: center; }
+.rate .rate-controls { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 12px; }
+.rate .rate-test-action { display: grid; min-width: 0; justify-items: center; }
+.rate .rate-action {
+  width: 100%; padding: 10px 23px; min-height: 44px; border: 1px solid var(--rate-signal);
+  border-radius: 9px; font: inherit; font-weight: 650; background: var(--rate-signal); color: var(--rate-on-signal);
+}
+.rate[data-state="running"] .rate-action { background: var(--rate-tint); color: var(--rate-signal); border-color: var(--rate-rule); }
+.rate :is(.rate-action, .rate-attribution):focus-visible { outline: 2px solid var(--rate-signal); outline-offset: 3px; }
+.rate .rate-status { color: var(--rate-subtle); font-size: 12px; }
+.rate .rate-status:not(:empty) { margin-top: 8px; }
+.rate .rate-announcement {
+  position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+.rate .rate-chart { padding: 14px 16px 13px; background: var(--rate-panel); border: 1px solid var(--rate-rule); border-radius: 13px; }
+.rate .rate-chart-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.rate .rate-chart h2 { font-size: 13px; font-weight: 650; }
+.rate :is(.rate-axis-unit, .rate-y, .rate-x) {
+  color: var(--rate-subtle); font-size: 11px; font-variant-numeric: tabular-nums;
+}
+.rate .rate-plot {
+  display: grid; grid-template-columns: minmax(25px, max-content) minmax(0, 1fr); gap: 8px 9px;
+  margin-top: 11px;
+}
+.rate .rate-y { display: flex; flex-direction: column; justify-content: space-between; text-align: right; line-height: 1; }
+/* Center the outer tick labels on the plot boundaries, just like the middle tick. */
+.rate .rate-y span:first-child { transform: translateY(-50%); }
+.rate .rate-y span:last-child { transform: translateY(50%); }
+.rate .rate-x { display: flex; grid-column: 2; justify-content: space-between; }
+.rate .rate-trace { position: relative; min-height: clamp(84px, 18svh, 180px); }
+.rate .rate-trace svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.rate .rate-gridlines { stroke: var(--rate-rule); opacity: .65; vector-effect: non-scaling-stroke; }
+.rate .rate-grid-baseline { opacity: 1; }
+.rate .rate-line { stroke: var(--rate-signal); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.rate .rate-fill { fill: var(--rate-signal); fill-opacity: .08; }
+.rate .rate-results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 17px; }
+.rate .rate-results > div { padding: 11px 12px; background: var(--rate-panel); border: 1px solid var(--rate-rule); border-radius: 10px; }
+.rate .rate-results > [data-active="true"] {
+  border-color: color-mix(in srgb, var(--rate-signal) 55%, var(--rate-rule));
+}
+.rate .rate-results dt { display: flex; align-items: center; gap: 6px; color: var(--rate-subtle); font-size: 12px; }
+.rate .rate-results dt svg { width: 14px; height: 14px; }
+.rate .rate-results dd { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; margin-top: 2px; }
+.rate .rate-results strong { font-size: clamp(20px, 3cqi, 28px); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.rate .rate-results dd span { color: var(--rate-subtle); font-size: 11px; }
+.rate .rate-metric-progress {
+  display: block; flex-basis: 100%; height: 3px; margin-top: 6px; border-radius: 4px;
+  background: linear-gradient(to right, var(--rate-signal) var(--rate-progress, 0%), var(--rate-rule) var(--rate-progress, 0%));
+}
+.rate .rate-details { display: grid; max-width: 100%; gap: 4px; margin-top: 12px; font-size: 12px; color: var(--rate-subtle); }
+.rate .rate-details > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 2px 6px; min-width: 0; }
+.rate .rate-details dd { min-width: 0; overflow-wrap: anywhere; font-weight: 550; color: var(--rate-text); }
+@container rate (min-width: 600px) {
+  .rate .rate-action { width: auto; }
+  .rate .rate-results { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@container rate (min-width: 860px) {
+  /* Match the control panel to the chart row and scale the dashboard on large screens. */
+  .rate .rate-main { grid-template-columns: minmax(235px, 1fr) minmax(0, 1.8fr); align-items: stretch; gap: clamp(16px, 1.8cqi, 30px); }
+  .rate .rate-intro,
+  .rate .rate-chart {
+    background: var(--rate-panel); border: 1px solid var(--rate-rule);
+    border-radius: 18px; padding: clamp(18px, 2.4cqi, 40px);
+  }
+  .rate .rate-intro { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .rate .rate-controls { gap: 18px; }
+  .rate .rate-brand { font-size: clamp(24px, 2vw, 32px); }
+  .rate .rate-mark { width: 36px; height: 36px; border-radius: 10px; }
+  .rate .rate-action { width: min(100%, 260px); min-height: 54px; font-size: clamp(15px, 1.1vw, 18px); }
+  .rate .rate-details { gap: 6px; margin-top: 16px; }
+  .rate .rate-details, .rate .rate-status { font-size: clamp(13px, .95vw, 16px); }
+  .rate .rate-chart h2 { font-size: clamp(16px, 1.15cqi, 20px); }
+  .rate :is(.rate-axis-unit, .rate-y, .rate-x) { font-size: clamp(12px, .88cqi, 15px); }
+  .rate .rate-plot { margin-top: 16px; column-gap: 12px; }
+  .rate .rate-trace { min-height: clamp(155px, 39svh, 510px); }
+  .rate .rate-results dt { font-size: clamp(13px, 1cqi, 16px); }
+  .rate .rate-results { gap: clamp(16px, 1.8cqi, 30px); margin-top: clamp(16px, 1.8cqi, 30px); }
+  .rate .rate-results > div { padding: clamp(14px, 1.6cqi, 26px); border-radius: 14px; }
+  .rate .rate-results strong { font-size: clamp(26px, 2.4cqi, 42px); }
+  .rate .rate-results dd span { font-size: clamp(12px, .9cqi, 15px); }
+  .rate .rate-metric-progress { height: 4px; margin-top: 10px; }
+}
+/* The control panel can be wider on a stacked tablet than in a desktop column. */
+@container controls (min-width: 456px) {
+  .rate .rate-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: clamp(16px, 4cqi, 28px); }
+  .rate .rate-action { width: min(100%, 260px); }
+}
+/* Short viewports keep the controls and data legible by reducing chart height and spacing. */
+@media (max-height: 640px) {
+  .rate .rate-controls { row-gap: 8px; }
+  .rate .rate-body { padding-block: 8px; }
+  .rate .rate-main { gap: 10px; }
+  .rate .rate-details { margin-top: 8px; gap: 2px 16px; line-height: 1.35; }
+  .rate .rate-status:not(:empty) { margin-top: 3px; }
+  .rate .rate-chart { padding: 8px 12px; }
+  .rate .rate-plot { margin-top: 9px; }
+  .rate .rate-trace { min-height: clamp(48px, 17svh, 108px); }
+  .rate .rate-results { margin-top: 10px; gap: 6px; }
+  .rate .rate-results > div { padding: 5px 8px; }
+  .rate .rate-results strong { font-size: clamp(18px, 2.4cqi, 24px); }
+  .rate .rate-metric-progress { margin-top: 4px; }
+}
+
+@media (max-height: 520px) {
+  @container rate (min-width: 520px) {
+    .rate .rate-main { grid-template-columns: minmax(200px, 1fr) minmax(0, 1.8fr); align-items: center; gap: 14px; }
+    .rate .rate-intro { padding: 8px 4px; }
+    .rate .rate-action { width: auto; }
+    .rate .rate-results { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+}
+@media (max-height: 480px) {
+  .rate .rate-body { padding-block: 4px; }
+  .rate .rate-main { gap: 8px; }
+  .rate .rate-controls { row-gap: 6px; }
+  .rate .rate-chart { padding-block: 6px; }
+  .rate .rate-trace { min-height: 36px; }
+  .rate .rate-results { margin-top: 8px; }
+  .rate .rate-results > div { padding-block: 4px; }
+}
+
+.rate-attribution { color: var(--rate-signal); font-size: 0.9em; }

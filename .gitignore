@@ -1,0 +1,6 @@
+/build/
+/image-bin/
+/release/
+/target/
+/web/dist/
+/web/node_modules/
