@@ -11,28 +11,28 @@ The page adapts to phones and computers, uses Simplified Chinese or English base
 
 ## How to deploy
 
-### Run with Docker
-
-```sh
-docker run -d --name rate --restart unless-stopped -p 8080:8080 mebtte/rate:latest
-```
-
-Open `http://localhost:8080/` on the server. To run a test from a phone or another computer, open `http://<server-address>:8080/` on that device.
-
 ### Download and run
 
-Download the file for your Linux, macOS, or Windows device from [GitHub Releases](https://github.com/mebtte/rate/releases).
+Download the release for your operating system and CPU. [GitHub Releases](https://github.com/mebtte/rate/releases)
 
-On Linux or macOS, open a terminal in your download directory, make the file executable, and run it. This example uses the Linux x64 file. Substitute the name of the file you downloaded.
+On Linux or macOS, run these commands in your download directory using the name of the file you downloaded.
 
 ```sh
 chmod +x rate-linux-amd64
 ./rate-linux-amd64
 ```
 
-On Windows, open PowerShell in your download directory and run the downloaded file, for example `.\rate-windows-amd64.exe`.
+On Windows, run the downloaded `.exe` in PowerShell, for example `.\rate-windows-amd64.exe`.
 
-Once rate is running, open `http://localhost:8080/`. To test from another device, add `--host 0.0.0.0` when starting rate, then open `http://<server-address>:8080/` on that device.
+Open `http://localhost:8080/` in your browser.
+
+### Run with Docker
+
+```sh
+docker run -p 8080:8080 mebtte/rate:latest
+```
+
+Open `http://localhost:8080/`, or use your server's address in place of `localhost`.
 
 ## License
 
