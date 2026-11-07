@@ -117,22 +117,19 @@ export async function measureTransfer(
     await wait(warmupMs, signal)
     const started = performance.now()
     const baseline = bytes
-    let previousTime = started
-    let previousBytes = baseline
 
     while (true) {
       await wait(sampleMs, signal)
-      const now = performance.now()
-      const elapsed = now - started
-      const rate = megabitsPerSecond(bytes - previousBytes, now - previousTime)
+      const elapsed = performance.now() - started
+      // Use the running average so batched byte updates do not create short-lived spikes.
+      const measuredBytes = bytes - baseline
+      const rate = megabitsPerSecond(measuredBytes, elapsed)
       onSample({ elapsed: elapsed / 1000, mbps: rate }, Math.min(elapsed / measurementMs, 1))
 
       if (elapsed >= measurementMs) {
-        if (bytes === baseline) throw new TestFailure('timeout')
-        return megabitsPerSecond(bytes - baseline, elapsed)
+        if (measuredBytes === 0) throw new TestFailure('timeout')
+        return rate
       }
-      previousTime = now
-      previousBytes = bytes
     }
   }
 

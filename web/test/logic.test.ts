@@ -3,7 +3,9 @@ import test from 'node:test'
 import { testEndpoints } from '../src/api.ts'
 import { chooseLanguage } from '../src/messages.ts'
 import { megabitsPerSecond, summarizeLatency } from '../src/metrics.ts'
-import { makeDownload, requireStatus, TestFailure } from '../src/transfer.ts'
+import { measurementMs } from '../src/protocol.ts'
+import type { TracePoint } from '../src/protocol.ts'
+import { makeDownload, measureTransfer, requireStatus, TestFailure } from '../src/transfer.ts'
 
 test('test URLs stay at the document origin and mount prefix', () => {
   assert.equal(testEndpoints('https://example.test/').ping, 'https://example.test/api/v1/ping')
@@ -26,6 +28,47 @@ test('latency uses the median and jitter uses consecutive samples', () => {
 test('throughput reports decimal megabits per second', () => {
   assert.equal(megabitsPerSecond(1_000_000, 500), 16)
   assert.equal(megabitsPerSecond(100, 0), 0)
+})
+
+test('live throughput averages post-warmup bytes and converges to the final result', async ({ mock }) => {
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] })
+  mock.method(performance, 'now', () => Date.now())
+
+  let countBytes!: (bytes: number) => void
+  const samples: { point: TracePoint; progress: number }[] = []
+  const result = measureTransfer((signal, count) => {
+    countBytes = count
+    return new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }))
+  }, 1, (point, progress) => samples.push({ point, progress }))
+
+  async function tick(ms: number) {
+    mock.timers.tick(ms)
+    // Resume the sampler so it can schedule the next tick against the fake clock.
+    await Promise.resolve()
+  }
+
+  countBytes(2_000_000)
+  await tick(1200)
+  assert.equal(samples.length, 0)
+
+  countBytes(1_000_000)
+  await tick(250)
+  await tick(250)
+  countBytes(500_000)
+  await tick(250)
+  assert.deepEqual(samples, [
+    { point: { elapsed: 0.25, mbps: 32 }, progress: 250 / measurementMs },
+    { point: { elapsed: 0.5, mbps: 16 }, progress: 500 / measurementMs },
+    { point: { elapsed: 0.75, mbps: 16 }, progress: 750 / measurementMs },
+  ])
+
+  for (let elapsed = 750; elapsed < measurementMs; elapsed += 250) await tick(250)
+  const finalRate = await result
+  assert.equal(finalRate, megabitsPerSecond(1_500_000, measurementMs))
+  assert.deepEqual(samples.at(-1), {
+    point: { elapsed: measurementMs / 1000, mbps: finalRate },
+    progress: 1,
+  })
 })
 
 test('selects the first supported browser language and falls back to English', () => {
