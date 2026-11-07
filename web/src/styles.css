@@ -31,7 +31,11 @@ body { margin: 0; }
 }
 .rate, .rate * { box-sizing: border-box; }
 .rate :is(h2, p, dl, dd) { margin: 0; }
-.rate .rate-brand { display: flex; align-items: center; justify-content: center; gap: 9px; font-size: 22px; font-weight: 750; letter-spacing: -.045em; }
+.rate .rate-brand {
+  display: flex; align-items: center; justify-self: center; gap: 9px;
+  color: inherit; text-decoration: none; font-size: 22px; font-weight: 750; letter-spacing: -.045em;
+}
+.rate .rate-brand:hover { color: var(--rate-signal); }
 .rate .rate-mark {
   display: grid; place-items: center; width: 29px; height: 29px; border-radius: 8px;
   background: var(--rate-signal); color: var(--rate-on-signal);
@@ -46,7 +50,7 @@ body { margin: 0; }
   border-radius: 9px; font: inherit; font-weight: 650; background: var(--rate-signal); color: var(--rate-on-signal);
 }
 .rate[data-state="running"] .rate-action { background: var(--rate-tint); color: var(--rate-signal); border-color: var(--rate-rule); }
-.rate :is(.rate-action, .rate-attribution):focus-visible { outline: 2px solid var(--rate-signal); outline-offset: 3px; }
+.rate :is(.rate-action, .rate-attribution, .rate-brand):focus-visible { outline: 2px solid var(--rate-signal); outline-offset: 3px; }
 .rate .rate-status { color: var(--rate-subtle); font-size: 12px; }
 .rate .rate-status:not(:empty) { margin-top: 8px; }
 .rate .rate-announcement {

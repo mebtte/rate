@@ -55,7 +55,9 @@ export function App() {
         <section className="rate-main" aria-label={copy.title}>
           <div className="rate-intro">
             <div className="rate-controls">
-              <div className="rate-brand"><span className="rate-mark"><Icon name="activity" /></span>rate</div>
+              <a className="rate-brand" href="https://github.com/mebtte/rate" aria-label="rate (GitHub)">
+                <span className="rate-mark"><Icon name="activity" /></span>rate
+              </a>
               <div className="rate-test-action">
                 <button className="rate-action" type="button" onClick={toggle}>{action}</button>
                 <ClientDetails client={client} copy={copy} language={language} />
