@@ -1,54 +1,41 @@
 # rate
 
-自托管浏览器测速工具。Rust CLI 同源提供 React 页面和测速 API。发布二进制内置前端资源和离线 IP 归属地数据库。
+rate is a speed test you can host on your own server. Open the test page on your phone or computer and select **Start test** to measure the connection from that device to your server.
 
-## 启动
+## What you can see
 
-```sh
-rate --host 0.0.0.0 --port 9000 --base-path /tools/speed
-```
+- Download speed, upload speed, latency, and jitter, plus a live chart of your speed during the test.
+- Your IP address and its approximate location, when available. Location data comes from [IPinfo](https://ipinfo.io/).
 
-打开 `http://localhost:9000/tools/speed/`。默认监听 `127.0.0.1:8080`, 挂载路径为 `/`。使用 `rate --help` 查看全部参数。反向代理转发时保留配置的路径前缀。通过 `--trusted-proxy 127.0.0.1` 等参数指定代理地址后, 服务会从可信代理的 `X-Forwarded-For` 读取客户端 IP。
+The page adapts to phones and computers, uses Simplified Chinese or English based on your browser language, and follows your system's light or dark mode. You can also protect the page with a password or give it a custom URL path.
 
-### HTTP Basic Auth
+## How to deploy
 
-```sh
-rate --basic-auth 'alice:example:password'
-```
-
-`--basic-auth` 接收 `用户名:密码`, 按第一个冒号分隔, 密码中的后续冒号原样保留。启用后, 页面、静态资源、测速 API 和健康检查都要求认证。Docker 和服务管理器可通过 `RATE_BASIC_AUTH` 注入同格式的凭据。对外部署时使用 HTTPS 反向代理传输凭据。
-
-### IP 归属地
-
-默认查询内置的 IPinfo MMDB。设置 `--ipinfo-api-key` 或 `RATE_IPINFO_API_KEY` 时, 服务端优先查询 IPinfo Lite, 在线查询失败时回退离线库。数据来源和许可见 [第三方声明](THIRD_PARTY_NOTICES.md)。
-
-## 从源码构建
-
-需要 Rust stable、Node.js、curl、jq 和 shasum。使用 nvm 在项目根目录选择 `.nvmrc` 指定的版本, 并通过环境变量 `IPINFO_DOWNLOAD_TOKEN` 提供可下载 Lite 数据库的 IPinfo access token。
+### Run with Docker
 
 ```sh
-nvm use
-(cd web && npm ci && npm test && npm run build)
-bash scripts/fetch-geoip.sh build/geoip/ipinfo_lite.mmdb
-cargo test --locked
-RATE_GEOIP_DB="$PWD/build/geoip/ipinfo_lite.mmdb" cargo build --locked --release
+docker run -d --name rate --restart unless-stopped -p 8080:8080 mebtte/rate:latest
 ```
 
-## 发布
+Open `http://localhost:8080/` on the server. To run a test from a phone or another computer, open `http://<server-address>:8080/` on that device.
 
-GitHub Actions 在新 tag 推送后构建 Windows x64 和 ARM64、Linux x64 和 ARM64、macOS ARM64, 并将五个可执行文件上传到对应的 GitHub Release。下载后的 Linux 或 macOS 文件可用 `chmod +x <文件名>` 添加执行权限。
+### Download and run
 
-每次发布构建从 IPinfo 下载最新可用的 Lite MMDB, 用官方 SHA-256 校验后将同一份文件交给五个平台。下载失败或校验始终不一致时, 发布流程会停止。`IPINFO_DOWNLOAD_TOKEN` 用于构建时下载, `RATE_IPINFO_API_KEY` 用于服务运行时的在线查询。
+Download the file for your Linux, macOS, or Windows device from [GitHub Releases](https://github.com/mebtte/rate/releases).
 
-同一次构建把两份 Linux 可执行文件打包成 `linux/amd64` 和 `linux/arm64` 的 Docker Hub 多平台镜像。启用发布前, 在 GitHub 仓库的 Actions 设置中配置以下值。
+On Linux or macOS, open a terminal in your download directory, make the file executable, and run it. This example uses the Linux x64 file. Substitute the name of the file you downloaded.
 
-| 类型 | 名称 | 值 |
-| --- | --- | --- |
-| Secret | `IPINFO_DOWNLOAD_TOKEN` | 有权下载 [IPinfo Lite 数据库](https://ipinfo.io/developers/ipinfo-lite-database)的 access token |
-| Variable | `DOCKERHUB_USERNAME` | Docker Hub 登录账号 |
-| Secret | `DOCKERHUB_TOKEN` | 对目标仓库有写权限的 Docker Hub access token |
-| Variable | `DOCKERHUB_IMAGE` | 可选的镜像名, 如 `my-org/rate`, 默认为 `<DOCKERHUB_USERNAME>/rate` |
+```sh
+chmod +x rate-linux-amd64
+./rate-linux-amd64
+```
 
-镜像使用 Git tag 作为版本标签, 含 Docker 标签非法字符的 Git tag 使用确定性的 SHA-256 标签。
+On Windows, open PowerShell in your download directory and run the downloaded file, for example `.\rate-windows-amd64.exe`.
 
-有多位仓库写入者时, 使用 [GitHub 标签规则集](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#restrict-creations)将发布标签的创建和修改权限限定给发布维护者。标签指向的提交决定发布工作流及构建代码。
+Once rate is running, open `http://localhost:8080/`. To test from another device, add `--host 0.0.0.0` when starting rate, then open `http://<server-address>:8080/` on that device.
+
+## License
+
+rate is licensed under the GNU General Public License version 3 only (GPL-3.0-only). [License text](LICENSE)
+
+The bundled IPinfo Lite database is licensed under Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0). [Third-party notices](THIRD_PARTY_NOTICES.md)
