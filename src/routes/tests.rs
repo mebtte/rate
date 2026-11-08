@@ -183,6 +183,54 @@ async fn client_only_reads_forwarded_for_from_a_trusted_peer() {
     }
 }
 
+#[tokio::test]
+async fn client_resolves_forwarded_chains_across_trusted_ipv4_and_ipv6_subnets() {
+    let app = router(&["rate", "--trusted-proxy", "172.20.0.0/16,fd00:1234::/64"]);
+    for (address, forwarded, nearest_proxy, expected_ip) in [
+        (
+            "[::ffff:172.20.3.7]:1234",
+            "203.0.113.1, 192.0.2.3",
+            "fd00:1234::8",
+            "192.0.2.3",
+        ),
+        (
+            "172.21.3.7:1234",
+            "203.0.113.1, 192.0.2.3",
+            "fd00:1234::8",
+            "172.21.3.7",
+        ),
+        (
+            "[fd00:1234::9]:1234",
+            "2001:db8::1, 2001:db8::2",
+            "172.20.250.8",
+            "2001:db8::2",
+        ),
+        (
+            "[fd00:1235::9]:1234",
+            "2001:db8::1, 2001:db8::2",
+            "172.20.250.8",
+            "fd00:1235::9",
+        ),
+    ] {
+        let request = Request::builder()
+            .uri("/api/v1/client")
+            .header("X-Forwarded-For", forwarded)
+            .header("X-Forwarded-For", nearest_proxy)
+            .body(Body::empty())
+            .unwrap();
+        let response = app
+            .clone()
+            .layer(peer(address))
+            .oneshot(request)
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let json = to_bytes(response.into_body(), 1024).await.unwrap();
+        let result = serde_json::from_slice::<serde_json::Value>(&json).unwrap();
+        assert_eq!(result["ip"], expected_ip, "socket peer {address}");
+    }
+}
+
 #[cfg(rate_has_geoip_db)]
 #[tokio::test]
 async fn embedded_database_returns_public_ip_details() {

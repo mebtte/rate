@@ -1,6 +1,7 @@
 use std::{ffi::OsString, net::IpAddr};
 
 use clap::Parser;
+use ipnet::IpNet;
 use tracing_subscriber::filter::LevelFilter;
 
 #[derive(Parser)]
@@ -18,9 +19,9 @@ pub struct Config {
     #[arg(long, env = "RATE_BASE_PATH", default_value = "/", value_parser = base_path)]
     pub base_path: String,
 
-    /// Reverse proxy address allowed to supply X-Forwarded-For. Repeat for multiple hops.
-    #[arg(long, env = "RATE_TRUSTED_PROXY", value_delimiter = ',')]
-    pub trusted_proxy: Vec<IpAddr>,
+    /// Trusted proxy IP or CIDR for X-Forwarded-For. Repeat or separate entries with commas.
+    #[arg(long, env = "RATE_TRUSTED_PROXY", value_delimiter = ',', value_parser = trusted_proxy)]
+    pub trusted_proxy: Vec<IpNet>,
 
     /// Log level (off, error, warn, info, debug or trace).
     #[arg(long, env = "RATE_LOG_LEVEL", default_value = "info")]
@@ -64,6 +65,30 @@ impl Config {
     }
 }
 
+fn trusted_proxy(value: &str) -> Result<IpNet, &'static str> {
+    let mut network = value
+        .parse::<IpAddr>()
+        .map(IpNet::from)
+        .or_else(|_| value.parse::<IpNet>())
+        .map_err(|_| "expected an IP address or CIDR")?;
+
+    // Match mapped addresses as IPv4, just like incoming peers and forwarded hops.
+    if let IpNet::V6(ipv6) = network
+        && let Some(ipv4) = ipv6.addr().to_ipv4_mapped()
+    {
+        let prefix = ipv6
+            .prefix_len()
+            .checked_sub(96)
+            .ok_or("IPv4-mapped IPv6 CIDR must use a prefix of at least /96")?;
+        network = IpNet::new(ipv4.into(), prefix).expect("valid mapped IPv4 prefix");
+    }
+
+    if network.prefix_len() == 0 {
+        return Err("trusted proxy CIDR must have a nonzero prefix length");
+    }
+    Ok(network.trunc())
+}
+
 fn base_path(value: &str) -> Result<String, &'static str> {
     if value == "/" {
         return Ok(value.into());
@@ -92,6 +117,40 @@ fn valid_credential(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn trusted_proxy_accepts_addresses_and_scoped_networks() {
+        let config = Config::try_parse_from([
+            "rate",
+            "--trusted-proxy",
+            "::ffff:127.0.0.1,2001:db8:1::/64",
+            "--trusted-proxy",
+            "::ffff:172.30.42.7/120",
+        ])
+        .unwrap();
+        let networks: Vec<_> = config
+            .trusted_proxy
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(
+            networks,
+            ["127.0.0.1/32", "2001:db8:1::/64", "172.30.42.0/24"]
+        );
+    }
+
+    #[test]
+    fn trusted_proxy_rejects_unscoped_and_invalid_networks() {
+        for invalid in [
+            "*",
+            "0.0.0.0/0",
+            "::/0",
+            "::ffff:0:0/96",
+            "::ffff:192.0.2.1/95",
+        ] {
+            assert!(Config::try_parse_from(["rate", "--trusted-proxy", invalid]).is_err());
+        }
+    }
 
     #[test]
     fn normalizes_and_validates_base_path() {

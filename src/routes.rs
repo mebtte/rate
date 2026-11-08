@@ -1,4 +1,4 @@
-use std::{error::Error, net::IpAddr, sync::Arc};
+use std::{error::Error, sync::Arc};
 
 use axum::{
     Json, Router,
@@ -9,6 +9,7 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
 };
+use ipnet::IpNet;
 use serde::Deserialize;
 
 use crate::{
@@ -24,7 +25,7 @@ use crate::{
 struct AppState {
     random_block: Bytes,
     geo: GeoLookup,
-    trusted_proxies: Vec<IpAddr>,
+    trusted_proxies: Vec<IpNet>,
     transfers: TransferLimits,
 }
 
@@ -42,11 +43,7 @@ pub fn build(config: &Config) -> Result<Router, Box<dyn Error>> {
         random_block: transfer::random_block()
             .map_err(|error| format!("unable to generate download data: {error}"))?,
         geo: GeoLookup::new(config.ipinfo_api_key.as_deref())?,
-        trusted_proxies: config
-            .trusted_proxy
-            .iter()
-            .map(IpAddr::to_canonical)
-            .collect(),
+        trusted_proxies: config.trusted_proxy.clone(),
         transfers: TransferLimits::new(64, 16),
     });
 
