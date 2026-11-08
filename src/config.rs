@@ -19,6 +19,10 @@ pub struct Config {
     #[arg(long, env = "RATE_BASE_PATH", default_value = "/", value_parser = base_path)]
     pub base_path: String,
 
+    /// Custom browser tab title, displayed as "TITLE - rate".
+    #[arg(long, env = "RATE_TITLE")]
+    pub title: Option<String>,
+
     /// Trusted proxy IP or CIDR for X-Forwarded-For. Repeat or separate entries with commas.
     #[arg(long, env = "RATE_TRUSTED_PROXY", value_delimiter = ',', value_parser = trusted_proxy)]
     pub trusted_proxy: Vec<IpNet>,

@@ -56,14 +56,13 @@ pub fn build(config: &Config) -> Result<Router, Box<dyn Error>> {
         .layer(middleware::from_fn(no_cache));
 
     let mut app = Router::new()
-        .route("/", get(assets::index))
         .route(
             "/healthz",
             get(|| async { "ok" }).layer(middleware::from_fn(no_cache)),
         )
-        .route("/{*path}", get(assets::file))
         .nest("/api/v1", api)
-        .with_state(state);
+        .with_state(state)
+        .merge(assets::router(config.title.as_deref()));
 
     if let Some(auth) = &auth {
         app = app.layer(middleware::from_fn_with_state(auth.clone(), auth::require));

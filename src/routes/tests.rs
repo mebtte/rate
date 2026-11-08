@@ -40,6 +40,30 @@ fn transfer_router() -> Router {
     router(&["rate"]).layer(peer("127.0.0.1:1234"))
 }
 
+#[cfg(rate_has_web_assets)]
+#[tokio::test]
+async fn browser_title_is_optional_and_escaped_on_both_page_routes() {
+    let default = router(&["rate"]);
+    let custom = router(&[
+        "rate",
+        "--base-path",
+        "/speed",
+        "--title",
+        "测速 & </title><script>",
+    ]);
+    let custom_title = "<title>测速 &amp; &lt;/title&gt;&lt;script&gt; - rate</title>";
+    for (app, path, expected) in [
+        (&default, "/", "<title>rate</title>"),
+        (&custom, "/speed/", custom_title),
+        (&custom, "/speed/index.html", custom_title),
+    ] {
+        let response = send(app, Method::GET, path, Body::empty(), None).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), 16 * 1024).await.unwrap();
+        assert!(std::str::from_utf8(&body).unwrap().contains(expected));
+    }
+}
+
 #[tokio::test]
 async fn api_streams_exact_download_bytes_and_acknowledges_upload() {
     let app = transfer_router();

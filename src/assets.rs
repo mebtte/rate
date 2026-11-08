@@ -1,8 +1,12 @@
 #[cfg(rate_has_web_assets)]
 use axum::http::header;
 use axum::{
+    Router,
+    body::Bytes,
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
+    routing::get,
 };
 
 #[cfg(rate_has_web_assets)]
@@ -15,9 +19,16 @@ const CONTENT_SECURITY_POLICY: &str = concat!(
     "frame-ancestors 'none'"
 );
 
-pub async fn index() -> Response {
+pub fn router(title: Option<&str>) -> Router {
+    Router::new()
+        .route("/", get(index))
+        .route("/{*path}", get(file))
+        .with_state(customize_index(title))
+}
+
+async fn index(State(custom_index): State<Option<Bytes>>) -> Response {
     if cfg!(rate_has_web_assets) {
-        serve("index.html")
+        serve("index.html", custom_index)
     } else {
         (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -27,12 +38,33 @@ pub async fn index() -> Response {
     }
 }
 
-pub async fn file(axum::extract::Path(path): axum::extract::Path<String>) -> Response {
-    serve(&path)
+async fn file(State(custom_index): State<Option<Bytes>>, Path(path): Path<String>) -> Response {
+    serve(&path, custom_index)
 }
 
 #[cfg(rate_has_web_assets)]
-fn serve(path: &str) -> Response {
+fn customize_index(title: Option<&str>) -> Option<Bytes> {
+    let title = title.filter(|title| !title.trim().is_empty())?;
+    let html = ASSETS.get_file("index.html")?.contents_utf8()?;
+    // Escape the title before inserting it into the built HTML template.
+    let title = title
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    Some(Bytes::from(html.replacen(
+        "<title>rate</title>",
+        &format!("<title>{title} - rate</title>"),
+        1,
+    )))
+}
+
+#[cfg(not(rate_has_web_assets))]
+fn customize_index(_: Option<&str>) -> Option<Bytes> {
+    None
+}
+
+#[cfg(rate_has_web_assets)]
+fn serve(path: &str, custom_index: Option<Bytes>) -> Response {
     if path
         .split('/')
         .any(|segment| matches!(segment, "" | "." | ".."))
@@ -44,6 +76,9 @@ fn serve(path: &str) -> Response {
     let Some(file) = ASSETS.get_file(path) else {
         return StatusCode::NOT_FOUND.into_response();
     };
+    let contents = custom_index
+        .filter(|_| path == "index.html")
+        .unwrap_or_else(|| Bytes::from_static(file.contents()));
     let content_type = mime_guess::from_path(path).first_or_octet_stream();
     let cache_control = if path.starts_with("assets/") {
         "public, max-age=31536000, immutable"
@@ -61,13 +96,13 @@ fn serve(path: &str) -> Response {
             (header::X_FRAME_OPTIONS, "DENY"),
             (header::REFERRER_POLICY, "no-referrer"),
         ],
-        file.contents(),
+        contents,
     )
         .into_response()
 }
 
 #[cfg(not(rate_has_web_assets))]
-fn serve(_: &str) -> Response {
+fn serve(_: &str, _: Option<Bytes>) -> Response {
     StatusCode::NOT_FOUND.into_response()
 }
 
@@ -90,7 +125,7 @@ mod tests {
             .expect("the frontend build includes a speed test worker");
 
         for path in ["index.html", worker.path().to_str().unwrap()] {
-            let response = serve(path);
+            let response = serve(path, None);
             assert_eq!(response.status(), StatusCode::OK);
             let headers = response.headers();
             let policy = headers[header::CONTENT_SECURITY_POLICY].to_str().unwrap();
